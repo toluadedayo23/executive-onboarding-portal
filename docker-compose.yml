@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"], interval: 5s, timeout: 5s, retries: 10 }
+  backend:
+    build: ./backend
+    environment:
+      DB_URL: ${DB_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-exec-platform}
+      JWT_TTL_MINUTES: ${JWT_TTL_MINUTES:-60}
+      AUTH_COOKIE: ${AUTH_COOKIE:-EXEC_AUTH}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      APP_SEED_ENABLED: ${APP_SEED_ENABLED:-false}
+      SEED_PASSWORD: ${SEED_PASSWORD:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+      UPLOAD_DIR: /var/lib/exec-platform/uploads
+      # DEV-ONLY defaults; override outside local development
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-BORf_5qYj-4ePkQiX7RrH3oBqmKCjtWDecjfaCc0XWf53BRoVI2D0TIBgI9HmNgnqSUOK86AqW9p-6VWjUrTP9A}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-bJkxUCspWSlV2EcveqVSPyS4_YtPgwrlpQPw5NVIwDk}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:dev-push@example.test}
+    volumes:
+      - uploads_data:/var/lib/exec-platform/uploads
+    ports: ["18080:8080"]
+    depends_on: { postgres: { condition: service_healthy } }
+  frontend:
+    build:
+      context: ./frontend
+    ports: ["5173:80"]
+    depends_on: [backend]
+volumes: { postgres_data: {}, uploads_data: {} }

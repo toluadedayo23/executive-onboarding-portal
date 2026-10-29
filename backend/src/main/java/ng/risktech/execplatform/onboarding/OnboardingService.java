@@ -55,6 +55,17 @@ public class OnboardingService {
         this.idempotency = idempotency;
     }
 
+    private static void requireEditable(ProfileRow row) {
+        if (!row.editable())
+            throw ApiException.conflict("NOT_EDITABLE", "This onboarding has been submitted and is locked");
+    }
+
+    private static void requireVersion(ProfileRow row, int version) {
+        if (row.version() != version) {
+            throw ApiException.conflict("VERSION_CONFLICT", "Your draft was changed elsewhere. Reload to get the latest version.");
+        }
+    }
+
     @Transactional
     public DraftResponse get(AuthenticatedUser user) {
         ProfileRow row = loadProfile(user.id(), false);
@@ -178,27 +189,6 @@ public class OnboardingService {
                 nationalId.length() < 4 ? null : nationalId.substring(nationalId.length() - 4), profileId);
     }
 
-    private static void requireEditable(ProfileRow row) {
-        if (!row.editable()) throw ApiException.conflict("NOT_EDITABLE", "This onboarding has been submitted and is locked");
-    }
-
-    private static void requireVersion(ProfileRow row, int version) {
-        if (row.version() != version) {
-            throw ApiException.conflict("VERSION_CONFLICT", "Your draft was changed elsewhere. Reload to get the latest version.");
-        }
-    }
-
-    private record ProfileRow(UUID profileId, ObjectNode draft, int version, Integer currentStep,
-                              OffsetDateTime submittedAt, UUID caseId, String caseStatus, String moreInfoMessage) {
-        String status() {
-            return caseStatus == null ? "DRAFT" : caseStatus;
-        }
-
-        boolean editable() {
-            return caseStatus == null || caseStatus.equals("MORE_INFO_REQUIRED");
-        }
-    }
-
     private ProfileRow loadProfile(UUID userId, boolean forUpdate) {
         db.update("INSERT INTO executive_profiles(user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING", userId);
         String sql = """
@@ -219,6 +209,17 @@ public class OnboardingService {
             return node instanceof ObjectNode object ? object : json.createObjectNode();
         } catch (Exception e) {
             throw new IllegalStateException("Stored draft is not valid JSON");
+        }
+    }
+
+    private record ProfileRow(UUID profileId, ObjectNode draft, int version, Integer currentStep,
+                              OffsetDateTime submittedAt, UUID caseId, String caseStatus, String moreInfoMessage) {
+        String status() {
+            return caseStatus == null ? "DRAFT" : caseStatus;
+        }
+
+        boolean editable() {
+            return caseStatus == null || caseStatus.equals("MORE_INFO_REQUIRED");
         }
     }
 }

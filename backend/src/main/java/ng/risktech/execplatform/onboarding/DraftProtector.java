@@ -9,7 +9,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** A masked value coming back from the client means "keep the stored ciphertext". */
+/**
+ * A masked value coming back from the client means "keep the stored ciphertext".
+ */
 @Component
 public class DraftProtector {
     static final String MASK = "••••";
@@ -22,6 +24,24 @@ public class DraftProtector {
 
     public DraftProtector(FieldEncryptionService crypto) {
         this.crypto = crypto;
+    }
+
+    static boolean isMasked(String value) {
+        return value.startsWith(MASK) || value.equals(ON_FILE);
+    }
+
+    static String maskTail(String value) {
+        return value.length() < 4 ? ON_FILE : MASK + value.substring(value.length() - 4);
+    }
+
+    static String maskEmail(String value) {
+        int at = value.indexOf('@');
+        return at > 0 ? MASK + value.substring(at) : ON_FILE;
+    }
+
+    private static void copyOrRemove(ObjectNode target, String field, JsonNode storedCiphertext) {
+        if (storedCiphertext != null && storedCiphertext.isTextual()) target.set(field, storedCiphertext);
+        else target.remove(field);
     }
 
     public ObjectNode protectStep(String step, JsonNode incoming, JsonNode storedDraft) {
@@ -82,19 +102,6 @@ public class DraftProtector {
         return crypto.encrypt(value, REFEREE_PHONE);
     }
 
-    static boolean isMasked(String value) {
-        return value.startsWith(MASK) || value.equals(ON_FILE);
-    }
-
-    static String maskTail(String value) {
-        return value.length() < 4 ? ON_FILE : MASK + value.substring(value.length() - 4);
-    }
-
-    static String maskEmail(String value) {
-        int at = value.indexOf('@');
-        return at > 0 ? MASK + value.substring(at) : ON_FILE;
-    }
-
     private void protectNationalId(ObjectNode profile, JsonNode storedProfile) {
         JsonNode value = profile.get("nationalId");
         if (value == null || value.isNull() || value.asText().isBlank()) {
@@ -130,11 +137,6 @@ public class DraftProtector {
         } else {
             referee.put(field, crypto.encrypt(value.asText().trim(), context));
         }
-    }
-
-    private static void copyOrRemove(ObjectNode target, String field, JsonNode storedCiphertext) {
-        if (storedCiphertext != null && storedCiphertext.isTextual()) target.set(field, storedCiphertext);
-        else target.remove(field);
     }
 
     private void decryptField(ObjectNode node, String field, String context) {

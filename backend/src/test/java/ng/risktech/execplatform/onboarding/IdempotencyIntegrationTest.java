@@ -42,6 +42,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class IdempotencyIntegrationTest {
     @Container
     static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    @Autowired
+    MockMvc mvc;
+    @Autowired
+    AuthService auth;
+    @Autowired
+    JdbcTemplate db;
+    @Autowired
+    DataSource dataSource;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry r) {
@@ -50,10 +58,17 @@ class IdempotencyIntegrationTest {
         r.add("DB_PASSWORD", postgres::getPassword);
     }
 
-    @Autowired MockMvc mvc;
-    @Autowired AuthService auth;
-    @Autowired JdbcTemplate db;
-    @Autowired DataSource dataSource;
+    private static String profile(int version, String name) {
+        return "{\"version\":" + version + ",\"currentStep\":1,\"data\":{\"fullName\":\"" + name + "\"}}";
+    }
+
+    private static MockHttpServletRequestBuilder save(User user, String key, String body) {
+        var principal = new AuthenticatedUser(user.getId(), user.getEmail(), user.getRole());
+        var token = new UsernamePasswordAuthenticationToken(principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXECUTIVE")));
+        MockHttpServletRequestBuilder request = put("/api/onboarding/steps/profile").with(authentication(token)).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content(body);
+        return key == null ? request : request.header("Idempotency-Key", key);
+    }
 
     @Test
     void theSameRequestWithTheSameKeyIsAppliedOnceAndReplayedIdentically() throws Exception {
@@ -123,17 +138,5 @@ class IdempotencyIntegrationTest {
     private int version(User u) {
         Integer v = db.queryForObject("SELECT version FROM executive_profiles WHERE user_id = ?", Integer.class, u.getId());
         return v == null ? 0 : v;
-    }
-
-    private static String profile(int version, String name) {
-        return "{\"version\":" + version + ",\"currentStep\":1,\"data\":{\"fullName\":\"" + name + "\"}}";
-    }
-
-    private static MockHttpServletRequestBuilder save(User user, String key, String body) {
-        var principal = new AuthenticatedUser(user.getId(), user.getEmail(), user.getRole());
-        var token = new UsernamePasswordAuthenticationToken(principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXECUTIVE")));
-        MockHttpServletRequestBuilder request = put("/api/onboarding/steps/profile").with(authentication(token)).with(csrf())
-                .contentType(MediaType.APPLICATION_JSON).content(body);
-        return key == null ? request : request.header("Idempotency-Key", key);
     }
 }

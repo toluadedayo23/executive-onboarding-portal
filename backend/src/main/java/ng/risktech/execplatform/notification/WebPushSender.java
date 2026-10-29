@@ -22,7 +22,8 @@ public class WebPushSender implements PushSender {
     private final PushService service;
 
     public WebPushSender(PushProperties props) {
-        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) Security.addProvider(new BouncyCastleProvider());
+        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null)
+            Security.addProvider(new BouncyCastleProvider());
         try {
             service = new PushService(props.vapidPublicKey(), props.vapidPrivateKey(), props.vapidSubject());
         } catch (GeneralSecurityException e) {

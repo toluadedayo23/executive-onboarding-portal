@@ -39,6 +39,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class VettingIntegrationTest {
     @Container
     static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    @Autowired
+    JdbcTemplate db;
+    @Autowired
+    AuthService auth;
+    @Autowired
+    VettingService vetting;
+    @Autowired
+    DocumentService documents;
+    AuthenticatedUser exec1, exec2, consultant, otherConsultant, admin;
+    private int sequence = 0;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry r) {
@@ -47,12 +57,9 @@ class VettingIntegrationTest {
         r.add("DB_PASSWORD", postgres::getPassword);
     }
 
-    @Autowired JdbcTemplate db;
-    @Autowired AuthService auth;
-    @Autowired VettingService vetting;
-    @Autowired DocumentService documents;
-
-    AuthenticatedUser exec1, exec2, consultant, otherConsultant, admin;
+    private static AuthenticatedUser principal(User u) {
+        return new AuthenticatedUser(u.getId(), u.getEmail(), u.getRole());
+    }
 
     @BeforeEach
     void seed() {
@@ -184,7 +191,7 @@ class VettingIntegrationTest {
         UUID case2 = caseFor(exec2, UNDER_REVIEW, consultant);
         UUID doc = UUID.randomUUID();
         db.update("INSERT INTO documents(id, profile_id, type, original_name, stored_name, content_type, size_bytes, sha256) "
-                + "VALUES (?, (SELECT profile_id FROM vetting_cases WHERE id = ?), 'CV', 'cv.pdf', ?, 'application/pdf', 10, ?)",
+                        + "VALUES (?, (SELECT profile_id FROM vetting_cases WHERE id = ?), 'CV', 'cv.pdf', ?, 'application/pdf', 10, ?)",
                 doc, case1, doc + ".pdf", "a".repeat(64));
 
         assertThat(vetting.detail(consultant, case1).documents()).extracting("originalName").containsExactly("cv.pdf");
@@ -193,12 +200,6 @@ class VettingIntegrationTest {
         assertThatThrownBy(() -> documents.downloadOwn(exec2, doc))
                 .isInstanceOf(ApiException.class).extracting("status").isEqualTo(HttpStatus.NOT_FOUND);
     }
-
-    private static AuthenticatedUser principal(User u) {
-        return new AuthenticatedUser(u.getId(), u.getEmail(), u.getRole());
-    }
-
-    private int sequence = 0;
 
     private UUID caseFor(AuthenticatedUser exec, VettingStatus status, AuthenticatedUser assignee) {
         db.update("INSERT INTO executive_profiles(user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING", exec.id());

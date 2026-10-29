@@ -27,9 +27,6 @@ public class ConsentService {
         this.audit = audit;
     }
 
-    public record Status(boolean granted, String notice) {
-    }
-
     public Status status(UUID userId) {
         return new Status(hasValidConsent(userId), NOTICE);
     }
@@ -51,5 +48,8 @@ public class ConsentService {
         if (hasValidConsent(actor.id())) return;
         db.update("INSERT INTO consents(user_id, ip_address) VALUES (?, CAST(? AS inet))", actor.id(), ip);
         audit.record(AuditEvent.of(AuditAction.CONSENT_GRANTED, AuditEntityType.CONSENT, actor.id().toString(), null));
+    }
+
+    public record Status(boolean granted, String notice) {
     }
 }

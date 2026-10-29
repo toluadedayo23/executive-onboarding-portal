@@ -6,7 +6,11 @@ import ng.risktech.execplatform.vetting.VettingStateMachine.Actor;
 import ng.risktech.execplatform.vetting.VettingStatus;
 import org.junit.jupiter.api.Test;
 
-import static ng.risktech.execplatform.vetting.VettingStatus.*;
+import static ng.risktech.execplatform.vetting.VettingStatus.MORE_INFO_REQUIRED;
+import static ng.risktech.execplatform.vetting.VettingStatus.REJECTED;
+import static ng.risktech.execplatform.vetting.VettingStatus.SUBMITTED;
+import static ng.risktech.execplatform.vetting.VettingStatus.UNDER_REVIEW;
+import static ng.risktech.execplatform.vetting.VettingStatus.VERIFIED;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

@@ -35,7 +35,10 @@ class IdempotencyServiceTest {
         when(repository.find(user, key)).thenReturn(Optional.of(new IdempotencyRepository.Stored("h1", 200, json.writeValueAsString(saved))));
         AtomicInteger saves = new AtomicInteger();
 
-        var outcome = service.run(user, key, "h1", () -> { saves.incrementAndGet(); return saved; });
+        var outcome = service.run(user, key, "h1", () -> {
+            saves.incrementAndGet();
+            return saved;
+        });
 
         assertThat(outcome.replayed()).isTrue();
         assertThat(outcome.body()).isEqualTo(saved);
@@ -52,7 +55,9 @@ class IdempotencyServiceTest {
     @Test
     void onlySuccessfulSavesAreStored() {
         when(repository.find(user, key)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.run(user, key, "h1", () -> { throw ApiException.conflict("VERSION_CONFLICT", "stale"); }))
+        assertThatThrownBy(() -> service.run(user, key, "h1", () -> {
+            throw ApiException.conflict("VERSION_CONFLICT", "stale");
+        }))
                 .isInstanceOf(ApiException.class);
         verify(repository, never()).insert(any(), any(), anyString(), anyInt(), anyString());
 

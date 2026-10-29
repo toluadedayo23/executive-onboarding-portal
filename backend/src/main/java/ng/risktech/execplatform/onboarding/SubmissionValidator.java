@@ -15,6 +15,11 @@ public class SubmissionValidator {
     private static final Pattern PHONE = Pattern.compile("[0-9+ ()-]{7,20}");
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
 
+    private static String text(JsonNode node, String field) {
+        JsonNode value = node == null ? null : node.get(field);
+        return value == null || value.isNull() ? null : value.asText().trim();
+    }
+
     public List<Problem> validate(JsonNode draft, String accountEmail) {
         List<Problem> problems = new ArrayList<>();
         for (String step : DraftShape.STEPS) problems.addAll(validateStep(step, draft, accountEmail));
@@ -59,7 +64,8 @@ public class SubmissionValidator {
         LocalDate start = date(p, item, "startDate", true);
         LocalDate end = date(p, item, "endDate", false);
         if (start != null && start.isAfter(LocalDate.now())) p.add(new Problem("experience", "startDate", "IN_FUTURE"));
-        if (start != null && end != null && end.isBefore(start)) p.add(new Problem("experience", "endDate", "BEFORE_START"));
+        if (start != null && end != null && end.isBefore(start))
+            p.add(new Problem("experience", "endDate", "BEFORE_START"));
     }
 
     private void sector(List<Problem> p, JsonNode item) {
@@ -72,7 +78,8 @@ public class SubmissionValidator {
         required(p, "qualifications", item, "title", 2, 120);
         required(p, "qualifications", item, "institution", 2, 120);
         int year = item.path("yearObtained").asInt(-1);
-        if (year < 1950 || year > LocalDate.now().getYear()) p.add(new Problem("qualifications", "yearObtained", "OUT_OF_RANGE"));
+        if (year < 1950 || year > LocalDate.now().getYear())
+            p.add(new Problem("qualifications", "yearObtained", "OUT_OF_RANGE"));
     }
 
     private void referee(List<Problem> p, JsonNode item, String accountEmail) {
@@ -85,10 +92,6 @@ public class SubmissionValidator {
         } else if (email.equalsIgnoreCase(accountEmail)) {
             p.add(new Problem("referees", "email", "SELF_REFERENCE"));
         }
-    }
-
-    private interface ItemCheck {
-        void check(JsonNode item);
     }
 
     private void items(List<Problem> p, JsonNode draft, String step, int min, int max, ItemCheck check) {
@@ -108,7 +111,8 @@ public class SubmissionValidator {
         JsonNode items = draft.path(step).path("items");
         for (int i = 0; i < items.size(); i++) {
             String value = text(items.get(i), field);
-            if (value != null && !seen.add(value.toLowerCase(Locale.ROOT))) p.add(new Problem(step, field, "DUPLICATE", i));
+            if (value != null && !seen.add(value.toLowerCase(Locale.ROOT)))
+                p.add(new Problem(step, field, "DUPLICATE", i));
         }
     }
 
@@ -133,8 +137,7 @@ public class SubmissionValidator {
         }
     }
 
-    private static String text(JsonNode node, String field) {
-        JsonNode value = node == null ? null : node.get(field);
-        return value == null || value.isNull() ? null : value.asText().trim();
+    private interface ItemCheck {
+        void check(JsonNode item);
     }
 }

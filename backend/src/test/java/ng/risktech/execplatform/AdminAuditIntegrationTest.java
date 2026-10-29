@@ -2,10 +2,10 @@ package ng.risktech.execplatform;
 
 import ng.risktech.execplatform.audit.AuditAction;
 import ng.risktech.execplatform.audit.AuditAdminController;
+import ng.risktech.execplatform.audit.AuditAdminController.Category;
 import ng.risktech.execplatform.audit.AuditEntityType;
 import ng.risktech.execplatform.audit.AuditEvent;
 import ng.risktech.execplatform.audit.AuditRecorder;
-import ng.risktech.execplatform.audit.AuditAdminController.Category;
 import ng.risktech.execplatform.auth.AuthService;
 import ng.risktech.execplatform.auth.AuthenticatedUser;
 import ng.risktech.execplatform.user.User;
@@ -35,6 +35,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AdminAuditIntegrationTest {
     @Container
     static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    @Autowired
+    AuthService auth;
+    @Autowired
+    AuditAdminController auditController;
+    @Autowired
+    JdbcTemplate db;
+    @Autowired
+    AuditRecorder audit;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry r) {
@@ -43,10 +51,11 @@ class AdminAuditIntegrationTest {
         r.add("DB_PASSWORD", postgres::getPassword);
     }
 
-    @Autowired AuthService auth;
-    @Autowired AuditAdminController auditController;
-    @Autowired JdbcTemplate db;
-    @Autowired AuditRecorder audit;
+    private static void signIn(User user) {
+        var principal = new AuthenticatedUser(user.getId(), user.getEmail(), user.getRole());
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                principal, null, List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole()))));
+    }
 
     @AfterEach
     void clearContext() {
@@ -110,11 +119,5 @@ class AdminAuditIntegrationTest {
         @SuppressWarnings("unchecked")
         var wildcard = (List<AuditAdminController.Entry>) auditController.list(0, 25, Category.ALL, null, "%", null, null).get("content");
         assertThat(wildcard).isEmpty();
-    }
-
-    private static void signIn(User user) {
-        var principal = new AuthenticatedUser(user.getId(), user.getEmail(), user.getRole());
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                principal, null, List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole()))));
     }
 }

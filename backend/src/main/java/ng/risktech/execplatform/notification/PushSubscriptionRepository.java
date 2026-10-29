@@ -20,9 +20,6 @@ public class PushSubscriptionRepository {
         this.db = db;
     }
 
-    public record Owned(UUID id, UUID userId) {
-    }
-
     public Optional<Owned> findByEndpointForUpdate(String endpoint) {
         return db.query("SELECT id, user_id FROM push_subscriptions WHERE endpoint = ? FOR UPDATE",
                 (rs, n) -> new Owned(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)), endpoint).stream().findFirst();
@@ -63,5 +60,8 @@ public class PushSubscriptionRepository {
 
     public int deleteAllForUser(UUID userId) {
         return db.update("DELETE FROM push_subscriptions WHERE user_id = ?", userId);
+    }
+
+    public record Owned(UUID id, UUID userId) {
     }
 }

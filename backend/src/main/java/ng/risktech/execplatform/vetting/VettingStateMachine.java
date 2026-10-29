@@ -11,11 +11,6 @@ import static ng.risktech.execplatform.vetting.VettingStatus.UNDER_REVIEW;
 import static ng.risktech.execplatform.vetting.VettingStatus.VERIFIED;
 
 public final class VettingStateMachine {
-    public enum Actor { EXECUTIVE, CONSULTANT }
-
-    public record Rule(VettingStatus from, VettingStatus to, Actor actor, boolean messageRequired) {
-    }
-
     static final List<Rule> RULES = List.of(
             new Rule(SUBMITTED, UNDER_REVIEW, Actor.CONSULTANT, false),
             new Rule(UNDER_REVIEW, MORE_INFO_REQUIRED, Actor.CONSULTANT, true),
@@ -37,5 +32,10 @@ public final class VettingStateMachine {
 
     public static List<Rule> available(VettingStatus from, Actor actor) {
         return RULES.stream().filter(r -> r.from() == from && r.actor() == actor).toList();
+    }
+
+    public enum Actor {EXECUTIVE, CONSULTANT}
+
+    public record Rule(VettingStatus from, VettingStatus to, Actor actor, boolean messageRequired) {
     }
 }

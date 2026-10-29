@@ -27,6 +27,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class StaleSessionIntegrationTest {
     @Container
     static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    static final Cookie STALE = new Cookie("EXEC_AUTH", "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdGFsZSJ9.not-a-valid-signature");
+    @Autowired
+    MockMvc mvc;
+    @Autowired
+    AuthService auth;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry r) {
@@ -34,11 +39,6 @@ class StaleSessionIntegrationTest {
         r.add("DB_USERNAME", postgres::getUsername);
         r.add("DB_PASSWORD", postgres::getPassword);
     }
-
-    static final Cookie STALE = new Cookie("EXEC_AUTH", "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdGFsZSJ9.not-a-valid-signature");
-
-    @Autowired MockMvc mvc;
-    @Autowired AuthService auth;
 
     @Test
     void signInWorksDespiteAStaleCookieAndProtectedCallsGetTheStandardJson401() throws Exception {

@@ -28,11 +28,8 @@ public class AuditAdminController {
         this.db = db;
     }
 
-    public enum Category { KEY, SECURITY, ALL }
-
-    public record Entry(long id, OffsetDateTime createdAt, UUID actorId, String actorEmail, String actorRole,
-                        String action, String entityType, String entityId, String target, String detail, String ip,
-                        String hash) {
+    private static String likeEscape(String text) {
+        return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     @GetMapping("/verify")
@@ -104,7 +101,10 @@ public class AuditAdminController {
         return Map.of("content", rows, "page", page, "size", size);
     }
 
-    private static String likeEscape(String text) {
-        return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    public enum Category {KEY, SECURITY, ALL}
+
+    public record Entry(long id, OffsetDateTime createdAt, UUID actorId, String actorEmail, String actorRole,
+                        String action, String entityType, String entityId, String target, String detail, String ip,
+                        String hash) {
     }
 }

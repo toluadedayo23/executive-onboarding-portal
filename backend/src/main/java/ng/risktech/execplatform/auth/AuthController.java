@@ -82,15 +82,15 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    public record DeleteRequest(String currentPassword, boolean confirmed) {}
-    public record PasswordChangeRequest(String currentPassword, String newPassword, String confirmation) {}
     @PreAuthorize("hasAnyRole('EXECUTIVE','CONSULTANT','ADMIN')")
     @PostMapping("/password")
     ResponseEntity<Void> password(@AuthenticationPrincipal AuthenticatedUser p, @Valid @RequestBody PasswordChangeRequest in) {
-        if (in.newPassword() == null || !in.newPassword().equals(in.confirmation())) throw ApiException.badRequest("Passwords do not match");
+        if (in.newPassword() == null || !in.newPassword().equals(in.confirmation()))
+            throw ApiException.badRequest("Passwords do not match");
         service.changePassword(service.current(p.id()), in.currentPassword(), in.newPassword());
         return ResponseEntity.noContent().build();
     }
+
     @PreAuthorize("hasRole('EXECUTIVE')")
     @PostMapping("/delete")
     ResponseEntity<Void> delete(@AuthenticationPrincipal AuthenticatedUser p, @Valid @RequestBody DeleteRequest in, HttpServletResponse res) {
@@ -104,5 +104,11 @@ public class AuthController {
     @GetMapping("/me")
     AuthDtos.UserResponse me(@AuthenticationPrincipal AuthenticatedUser p) {
         return new AuthDtos.UserResponse(p.id(), p.email(), p.role());
+    }
+
+    public record DeleteRequest(String currentPassword, boolean confirmed) {
+    }
+
+    public record PasswordChangeRequest(String currentPassword, String newPassword, String confirmation) {
     }
 }

@@ -15,6 +15,21 @@ class SubscriptionValidatorTest {
     static final String P256DH = b64(key65());
     static final String AUTH = b64(new byte[16]);
 
+    private static void rejects(String endpoint, String p256dh, String auth) {
+        assertThatThrownBy(() -> SubscriptionValidator.validate(endpoint, p256dh, auth, HOSTS))
+                .isInstanceOf(ApiException.class).hasMessage("This push subscription is not supported");
+    }
+
+    private static byte[] key65() {
+        byte[] key = new byte[65];
+        key[0] = 0x04;
+        return key;
+    }
+
+    private static String b64(byte[] bytes) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
     @Test
     void acceptsAValidFcmStyleSubscription() {
         assertThatCode(() -> SubscriptionValidator.validate(FCM, P256DH, AUTH, HOSTS)).doesNotThrowAnyException();
@@ -34,20 +49,5 @@ class SubscriptionValidatorTest {
         rejects(FCM, b64(new byte[64]), AUTH);
         rejects(FCM, "not base64!!", AUTH);
         rejects(FCM, P256DH, b64(new byte[8]));
-    }
-
-    private static void rejects(String endpoint, String p256dh, String auth) {
-        assertThatThrownBy(() -> SubscriptionValidator.validate(endpoint, p256dh, auth, HOSTS))
-                .isInstanceOf(ApiException.class).hasMessage("This push subscription is not supported");
-    }
-
-    private static byte[] key65() {
-        byte[] key = new byte[65];
-        key[0] = 0x04;
-        return key;
-    }
-
-    private static String b64(byte[] bytes) {
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 }

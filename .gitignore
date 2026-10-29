@@ -1,0 +1,23 @@
+# Secrets and local env
+.env
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Build output
+backend/target/
+backend/data/
+frontend/node_modules/
+frontend/dist/
+frontend/.yarn/install-state.gz
+frontend/.yarn/cache/
+*.tsbuildinfo
+
+# Local artefacts
+*.log
+cookies.txt
+
+# Assessment brief (confidential, not part of the deliverable)
+Software_Developer_Case_Study_Assessment_Updated.pdf

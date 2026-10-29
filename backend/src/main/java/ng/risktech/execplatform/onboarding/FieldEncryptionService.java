@@ -23,7 +23,8 @@ public class FieldEncryptionService {
 
     public String encrypt(String plaintext, String aad) {
         try {
-            byte[] iv = new byte[12]; random.nextBytes(iv);
+            byte[] iv = new byte[12];
+            random.nextBytes(iv);
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(128, iv));
             cipher.updateAAD(aad.getBytes(StandardCharsets.UTF_8));
@@ -32,7 +33,9 @@ public class FieldEncryptionService {
             System.arraycopy(iv, 0, combined, 0, iv.length);
             System.arraycopy(ciphertext, 0, combined, iv.length, ciphertext.length);
             return "v1:" + Base64.getUrlEncoder().withoutPadding().encodeToString(combined);
-        } catch (Exception ex) { throw new IllegalStateException("Unable to protect field", ex); }
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to protect field", ex);
+        }
     }
 
     public String decrypt(String value, String aad) {
@@ -43,6 +46,8 @@ public class FieldEncryptionService {
             cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, combined, 0, 12));
             cipher.updateAAD(aad.getBytes(StandardCharsets.UTF_8));
             return new String(cipher.doFinal(combined, 12, combined.length - 12), StandardCharsets.UTF_8);
-        } catch (Exception ex) { throw new IllegalStateException("Unable to read protected field", ex); }
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to read protected field", ex);
+        }
     }
 }

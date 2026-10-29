@@ -48,15 +48,44 @@ public class IdempotencyService {
         this.hmacKey = new SecretKeySpec(hmac(Base64.getDecoder().decode(encryptionKey), "idempotency-v1"), "HmacSHA256");
     }
 
-    public record Outcome(SaveResponse body, boolean replayed) {
-    }
-
     public static UUID parseKey(String header) {
         if (header == null) return null;
         try {
             return UUID.fromString(header.trim());
         } catch (IllegalArgumentException e) {
             throw ApiException.badRequest("Idempotency-Key must be a UUID");
+        }
+    }
+
+    private static JsonNode sorted(JsonNode node) {
+        if (node == null) return JsonNodeFactory.instance.nullNode();
+        if (node.isObject()) {
+            ObjectNode out = JsonNodeFactory.instance.objectNode();
+            List<String> names = new ArrayList<>();
+            node.fieldNames().forEachRemaining(names::add);
+            names.sort(String::compareTo);
+            for (String name : names) out.set(name, sorted(node.get(name)));
+            return out;
+        }
+        if (node.isArray()) {
+            ArrayNode out = JsonNodeFactory.instance.arrayNode();
+            node.forEach(item -> out.add(sorted(item)));
+            return out;
+        }
+        return node;
+    }
+
+    private static byte[] hmac(byte[] key, String message) {
+        return hmac(new SecretKeySpec(key, "HmacSHA256"), message);
+    }
+
+    private static byte[] hmac(SecretKeySpec key, String message) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(key);
+            return mac.doFinal(message.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            throw new IllegalStateException("HMAC unavailable");
         }
     }
 
@@ -91,24 +120,6 @@ public class IdempotencyService {
         if (removed > 0) log.info("Purged {} expired idempotency keys", removed);
     }
 
-    private static JsonNode sorted(JsonNode node) {
-        if (node == null) return JsonNodeFactory.instance.nullNode();
-        if (node.isObject()) {
-            ObjectNode out = JsonNodeFactory.instance.objectNode();
-            List<String> names = new ArrayList<>();
-            node.fieldNames().forEachRemaining(names::add);
-            names.sort(String::compareTo);
-            for (String name : names) out.set(name, sorted(node.get(name)));
-            return out;
-        }
-        if (node.isArray()) {
-            ArrayNode out = JsonNodeFactory.instance.arrayNode();
-            node.forEach(item -> out.add(sorted(item)));
-            return out;
-        }
-        return node;
-    }
-
     private SaveResponse read(String body) {
         try {
             SaveResponse stored = json.readValue(body, SaveResponse.class);
@@ -130,17 +141,6 @@ public class IdempotencyService {
         }
     }
 
-    private static byte[] hmac(byte[] key, String message) {
-        return hmac(new SecretKeySpec(key, "HmacSHA256"), message);
-    }
-
-    private static byte[] hmac(SecretKeySpec key, String message) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(key);
-            return mac.doFinal(message.getBytes(StandardCharsets.UTF_8));
-        } catch (Exception e) {
-            throw new IllegalStateException("HMAC unavailable");
-        }
+    public record Outcome(SaveResponse body, boolean replayed) {
     }
 }

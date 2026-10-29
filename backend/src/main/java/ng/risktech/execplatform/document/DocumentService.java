@@ -41,7 +41,10 @@ public class DocumentService {
     private static final String COLUMNS =
             "id, type, original_name, content_type, size_bytes, uploaded_at, identification_type, certification_name";
     private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
-
+    private static final RowMapper<DocumentView> VIEW = (rs, n) -> new DocumentView(
+            rs.getObject("id", UUID.class), rs.getString("type"), rs.getString("original_name"),
+            rs.getString("content_type"), rs.getLong("size_bytes"), rs.getObject("uploaded_at", OffsetDateTime.class),
+            rs.getString("identification_type"), rs.getString("certification_name"));
     private final JdbcTemplate db;
     private final AuditRecorder audit;
     private final ConsentService consent;
@@ -55,12 +58,48 @@ public class DocumentService {
         this.root = Path.of(uploadDir).toAbsolutePath().normalize();
     }
 
+    private static byte[] readHeader(MultipartFile file) {
+        try (InputStream in = file.getInputStream()) {
+            return in.readNBytes(8);
+        } catch (IOException e) {
+            throw ApiException.badRequest("Unable to read file");
+        }
+    }
+
+    static String sanitiseName(String name) {
+        if (name == null || name.isBlank()) return "document";
+        String base = Path.of(name.replace('\\', '/')).getFileName().toString();
+        String safe = base.replaceAll("[^A-Za-z0-9._ -]", "_");
+        return safe.length() > 200 ? safe.substring(safe.length() - 200) : safe;
+    }
+
+    private static String sha256(Path file) throws IOException {
+        try (InputStream in = Files.newInputStream(file)) {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) > 0) digest.update(buffer, 0, read);
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static void deleteQuietly(Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException e) {
+            log.warn("Could not delete stored file {}", path.getFileName());
+        }
+    }
+
     @Transactional
     public DocumentView upload(AuthenticatedUser user, String type, String identificationType,
                                String certificationName, MultipartFile file) {
         consent.requireConsent(user.id());
         if (!TYPES.contains(type)) throw ApiException.badRequest("Unsupported document type");
-        if (type.equals("ID") && !ID_TYPES.contains(identificationType)) throw ApiException.badRequest("Choose a valid identification type");
+        if (type.equals("ID") && !ID_TYPES.contains(identificationType))
+            throw ApiException.badRequest("Choose a valid identification type");
         if (type.equals("CERTIFICATE") && (certificationName == null || certificationName.isBlank() || certificationName.length() > 160)) {
             throw ApiException.badRequest("Certification name is required");
         }
@@ -191,44 +230,4 @@ public class DocumentService {
     // Stub: a real deployment would call an AV scanner here and quarantine on a hit
     private void virusScanHook(Path file) {
     }
-
-    private static byte[] readHeader(MultipartFile file) {
-        try (InputStream in = file.getInputStream()) {
-            return in.readNBytes(8);
-        } catch (IOException e) {
-            throw ApiException.badRequest("Unable to read file");
-        }
-    }
-
-    static String sanitiseName(String name) {
-        if (name == null || name.isBlank()) return "document";
-        String base = Path.of(name.replace('\\', '/')).getFileName().toString();
-        String safe = base.replaceAll("[^A-Za-z0-9._ -]", "_");
-        return safe.length() > 200 ? safe.substring(safe.length() - 200) : safe;
-    }
-
-    private static String sha256(Path file) throws IOException {
-        try (InputStream in = Files.newInputStream(file)) {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = in.read(buffer)) > 0) digest.update(buffer, 0, read);
-            return HexFormat.of().formatHex(digest.digest());
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private static void deleteQuietly(Path path) {
-        try {
-            Files.deleteIfExists(path);
-        } catch (IOException e) {
-            log.warn("Could not delete stored file {}", path.getFileName());
-        }
-    }
-
-    private static final RowMapper<DocumentView> VIEW = (rs, n) -> new DocumentView(
-            rs.getObject("id", UUID.class), rs.getString("type"), rs.getString("original_name"),
-            rs.getString("content_type"), rs.getLong("size_bytes"), rs.getObject("uploaded_at", OffsetDateTime.class),
-            rs.getString("identification_type"), rs.getString("certification_name"));
 }

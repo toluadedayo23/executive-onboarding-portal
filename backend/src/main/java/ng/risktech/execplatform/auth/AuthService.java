@@ -11,9 +11,9 @@ import ng.risktech.execplatform.onboarding.IdempotencyRepository;
 import ng.risktech.execplatform.user.User;
 import ng.risktech.execplatform.user.UserRepository;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
@@ -96,16 +96,17 @@ public class AuthService {
 
     @Transactional
     public void deleteExecutive(User u, String password) {
-        if (password == null || !encoder.matches(password, u.getPasswordHash())) throw new SecurityException("Invalid credentials");
+        if (password == null || !encoder.matches(password, u.getPasswordHash()))
+            throw new SecurityException("Invalid credentials");
         UUID id = u.getId();
         documents.purgeForUser(id);
         pushEraser.eraseFor(id);
         idempotencyKeys.deleteAllForUser(id);
-        db.update("DELETE FROM experiences WHERE profile_id IN (SELECT id FROM executive_profiles WHERE user_id=?)",id);
-        db.update("DELETE FROM sector_expertise WHERE profile_id IN (SELECT id FROM executive_profiles WHERE user_id=?)",id);
-        db.update("DELETE FROM qualifications WHERE profile_id IN (SELECT id FROM executive_profiles WHERE user_id=?)",id);
-        db.update("DELETE FROM referees WHERE profile_id IN (SELECT id FROM executive_profiles WHERE user_id=?)",id);
-        db.update("UPDATE executive_profiles SET draft_data='{}'::jsonb,national_id_encrypted=NULL,national_id_last4=NULL,current_step=NULL,submitted_at=NULL,version=version+1 WHERE user_id=?",id);
+        db.update("DELETE FROM experiences WHERE profile_id IN (SELECT id FROM executive_profiles WHERE user_id=?)", id);
+        db.update("DELETE FROM sector_expertise WHERE profile_id IN (SELECT id FROM executive_profiles WHERE user_id=?)", id);
+        db.update("DELETE FROM qualifications WHERE profile_id IN (SELECT id FROM executive_profiles WHERE user_id=?)", id);
+        db.update("DELETE FROM referees WHERE profile_id IN (SELECT id FROM executive_profiles WHERE user_id=?)", id);
+        db.update("UPDATE executive_profiles SET draft_data='{}'::jsonb,national_id_encrypted=NULL,national_id_last4=NULL,current_step=NULL,submitted_at=NULL,version=version+1 WHERE user_id=?", id);
         u.setEmail("deleted+" + id + "@invalid.example");
         u.setPasswordHash(encoder.encode(UUID.randomUUID().toString()));
         u.setActive(false);
@@ -116,7 +117,8 @@ public class AuthService {
 
     @Transactional
     public void changePassword(User u, String current, String next) {
-        if (current == null || !encoder.matches(current, u.getPasswordHash())) throw new SecurityException("Invalid credentials");
+        if (current == null || !encoder.matches(current, u.getPasswordHash()))
+            throw new SecurityException("Invalid credentials");
         policy.validate(next, u.getEmail());
         u.setPasswordHash(encoder.encode(next));
         u.setTokenVersion(u.getTokenVersion() + 1);
@@ -126,7 +128,8 @@ public class AuthService {
 
     @Transactional
     public void setActive(UUID id, boolean active, UUID actor) {
-        if (id.equals(actor)) throw ApiException.conflict("SELF_DEACTIVATION", "Admins cannot deactivate their own account");
+        if (id.equals(actor))
+            throw ApiException.conflict("SELF_DEACTIVATION", "Admins cannot deactivate their own account");
         User u = users.findById(id).orElseThrow(ApiException::notFound);
         u.setActive(active);
         if (!active) {

@@ -52,6 +52,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PushNotificationIntegrationTest {
     @Container
     static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    @Autowired
+    MockMvc mvc;
+    @Autowired
+    AuthService auth;
+    @Autowired
+    VettingService vetting;
+    @Autowired
+    JdbcTemplate db;
+    @Autowired
+    TransactionTemplate tx;
+    @Autowired
+    FakeSender sender;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry r) throws Exception {
@@ -66,32 +78,48 @@ class PushNotificationIntegrationTest {
         r.add("app.push.vapid-subject", () -> "mailto:test@example.test");
     }
 
-    @TestConfiguration
-    static class FakeSenderConfig {
-        @Bean
-        @Primary
-        FakeSender fakeSender() {
-            return new FakeSender();
+    private static MockHttpServletRequestBuilder as(MockHttpServletRequestBuilder request, User user) {
+        var token = new UsernamePasswordAuthenticationToken(principal(user), null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole())));
+        return request.with(authentication(token)).with(csrf()).contentType(MediaType.APPLICATION_JSON);
+    }
+
+    private static AuthenticatedUser principal(User user) {
+        return new AuthenticatedUser(user.getId(), user.getEmail(), user.getRole());
+    }
+
+    private static String subscription(String endpoint) {
+        byte[] key = new byte[65];
+        key[0] = 0x04;
+        return "{\"endpoint\":\"" + endpoint + "\",\"keys\":{\"p256dh\":\"" + b64(key) + "\",\"auth\":\"" + b64(new byte[16]) + "\"}}";
+    }
+
+    private static void await(BooleanSupplier condition) throws InterruptedException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (!condition.getAsBoolean()) {
+            if (System.nanoTime() > deadline) throw new AssertionError("Condition not met within 5s");
+            Thread.sleep(50);
         }
     }
 
-    static class FakeSender implements PushSender {
-        final List<UUID> sentTo = new CopyOnWriteArrayList<>();
-        volatile Result nextResult = Result.OK;
-
-        @Override
-        public Result send(Target target, byte[] payload) {
-            sentTo.add(target.id());
-            return nextResult;
-        }
+    private static byte[] uncompressed(ECPublicKey key) {
+        byte[] out = new byte[65];
+        out[0] = 0x04;
+        System.arraycopy(fixed32(key.getW().getAffineX().toByteArray()), 0, out, 1, 32);
+        System.arraycopy(fixed32(key.getW().getAffineY().toByteArray()), 0, out, 33, 32);
+        return out;
     }
 
-    @Autowired MockMvc mvc;
-    @Autowired AuthService auth;
-    @Autowired VettingService vetting;
-    @Autowired JdbcTemplate db;
-    @Autowired TransactionTemplate tx;
-    @Autowired FakeSender sender;
+    private static byte[] fixed32(byte[] value) {
+        byte[] out = new byte[32];
+        int copy = Math.min(32, value.length);
+        System.arraycopy(value, value.length - copy, out, 32 - copy, copy);
+        return out;
+    }
+
+    private static String b64(byte[] bytes) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
 
     @BeforeEach
     void reset() {
@@ -173,7 +201,7 @@ class PushNotificationIntegrationTest {
         db.update("INSERT INTO executive_profiles(user_id) VALUES (?)", exec.getId());
         UUID caseId = UUID.randomUUID();
         db.update("INSERT INTO vetting_cases(id, profile_id, status, assigned_consultant_id, submitted_at) "
-                + "VALUES (?, (SELECT id FROM executive_profiles WHERE user_id = ?), 'UNDER_REVIEW', ?, now())",
+                        + "VALUES (?, (SELECT id FROM executive_profiles WHERE user_id = ?), 'UNDER_REVIEW', ?, now())",
                 caseId, exec.getId(), consultant.getId());
         return caseId;
     }
@@ -183,46 +211,23 @@ class PushNotificationIntegrationTest {
         return n == null ? 0 : n;
     }
 
-    private static MockHttpServletRequestBuilder as(MockHttpServletRequestBuilder request, User user) {
-        var token = new UsernamePasswordAuthenticationToken(principal(user), null,
-                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole())));
-        return request.with(authentication(token)).with(csrf()).contentType(MediaType.APPLICATION_JSON);
-    }
-
-    private static AuthenticatedUser principal(User user) {
-        return new AuthenticatedUser(user.getId(), user.getEmail(), user.getRole());
-    }
-
-    private static String subscription(String endpoint) {
-        byte[] key = new byte[65];
-        key[0] = 0x04;
-        return "{\"endpoint\":\"" + endpoint + "\",\"keys\":{\"p256dh\":\"" + b64(key) + "\",\"auth\":\"" + b64(new byte[16]) + "\"}}";
-    }
-
-    private static void await(BooleanSupplier condition) throws InterruptedException {
-        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-        while (!condition.getAsBoolean()) {
-            if (System.nanoTime() > deadline) throw new AssertionError("Condition not met within 5s");
-            Thread.sleep(50);
+    @TestConfiguration
+    static class FakeSenderConfig {
+        @Bean
+        @Primary
+        FakeSender fakeSender() {
+            return new FakeSender();
         }
     }
 
-    private static byte[] uncompressed(ECPublicKey key) {
-        byte[] out = new byte[65];
-        out[0] = 0x04;
-        System.arraycopy(fixed32(key.getW().getAffineX().toByteArray()), 0, out, 1, 32);
-        System.arraycopy(fixed32(key.getW().getAffineY().toByteArray()), 0, out, 33, 32);
-        return out;
-    }
+    static class FakeSender implements PushSender {
+        final List<UUID> sentTo = new CopyOnWriteArrayList<>();
+        volatile Result nextResult = Result.OK;
 
-    private static byte[] fixed32(byte[] value) {
-        byte[] out = new byte[32];
-        int copy = Math.min(32, value.length);
-        System.arraycopy(value, value.length - copy, out, 32 - copy, copy);
-        return out;
-    }
-
-    private static String b64(byte[] bytes) {
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        @Override
+        public Result send(Target target, byte[] payload) {
+            sentTo.add(target.id());
+            return nextResult;
+        }
     }
 }

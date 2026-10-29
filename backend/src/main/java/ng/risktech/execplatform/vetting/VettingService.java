@@ -47,6 +47,34 @@ public class VettingService {
         this.events = events;
     }
 
+    static String historyEvent(String action, String from, String to) {
+        if (AuditAction.ONBOARDING_SUBMITTED.equals(action)) return "SUBMITTED";
+        if (AuditAction.VETTING_NOTE_ADDED.equals(action)) return "NOTE_ADDED";
+        if (!AuditAction.VETTING_TRANSITION.equals(action) || to == null) return "OTHER";
+        return switch (to) {
+            case "UNDER_REVIEW" -> "MORE_INFO_REQUIRED".equals(from) ? "RESUBMITTED" : "PICKED_UP";
+            case "MORE_INFO_REQUIRED" -> "MORE_INFO_REQUESTED";
+            default -> to;
+        };
+    }
+
+    // Cases a viewer cannot see are reported as 404 so their existence is not confirmed
+    static boolean canSee(AuthenticatedUser viewer, CaseRow c) {
+        if ("ADMIN".equals(viewer.role())) return true;
+        return "CONSULTANT".equals(viewer.role())
+                && (c.status() == VettingStatus.SUBMITTED || viewer.id().equals(c.assignedConsultantId()));
+    }
+
+    private static void requireStaff(AuthenticatedUser viewer) {
+        if (!"CONSULTANT".equals(viewer.role()) && !"ADMIN".equals(viewer.role())) {
+            throw new AccessDeniedException("Reviewer access only");
+        }
+    }
+
+    private static String nameOrDefault(String name) {
+        return name == null || name.isBlank() ? "Unnamed executive" : name;
+    }
+
     public List<QueueItem> queue(AuthenticatedUser viewer, VettingStatus status) {
         requireStaff(viewer);
         String sql = """
@@ -90,7 +118,8 @@ public class VettingService {
 
     @Transactional
     public CaseView transition(AuthenticatedUser actor, UUID caseId, VettingStatus target, String message) {
-        if (!"CONSULTANT".equals(actor.role())) throw new AccessDeniedException("Only consultants change vetting status");
+        if (!"CONSULTANT".equals(actor.role()))
+            throw new AccessDeniedException("Only consultants change vetting status");
         CaseRow c = loadCase(caseId, true);
         if (!canSee(actor, c)) throw ApiException.notFound();
         Rule rule = VettingStateMachine.require(c.status(), target, Actor.CONSULTANT);
@@ -98,7 +127,8 @@ public class VettingService {
             throw ApiException.forbidden("NOT_ASSIGNED", "Only the assigned consultant can act on this case");
         }
         String text = message == null || message.isBlank() ? null : message.trim();
-        if (rule.messageRequired() && text == null) throw ApiException.badRequest("A message is required for this action");
+        if (rule.messageRequired() && text == null)
+            throw ApiException.badRequest("A message is required for this action");
 
         switch (target) {
             case UNDER_REVIEW -> db.update(
@@ -143,26 +173,15 @@ public class VettingService {
 
     List<HistoryEntry> history(UUID caseId, UUID profileId) {
         return db.query("""
-                SELECT a.created_at, a.action, a.detail->>'to' AS to_status, a.detail->>'from' AS from_status,
-                       u.email, a.actor_role
-                FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id
-                WHERE (a.entity_type = 'VETTING_CASE' AND a.entity_id = ?)
-                   OR (a.action = 'ONBOARDING_SUBMITTED' AND a.entity_id = ?)
-                ORDER BY a.id
-                """, (rs, n) -> new HistoryEntry(rs.getObject(1, OffsetDateTime.class),
-                historyEvent(rs.getString(2), rs.getString(4), rs.getString(3)), rs.getString(5), rs.getString(6)),
+                        SELECT a.created_at, a.action, a.detail->>'to' AS to_status, a.detail->>'from' AS from_status,
+                               u.email, a.actor_role
+                        FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id
+                        WHERE (a.entity_type = 'VETTING_CASE' AND a.entity_id = ?)
+                           OR (a.action = 'ONBOARDING_SUBMITTED' AND a.entity_id = ?)
+                        ORDER BY a.id
+                        """, (rs, n) -> new HistoryEntry(rs.getObject(1, OffsetDateTime.class),
+                        historyEvent(rs.getString(2), rs.getString(4), rs.getString(3)), rs.getString(5), rs.getString(6)),
                 caseId.toString(), profileId.toString());
-    }
-
-    static String historyEvent(String action, String from, String to) {
-        if (AuditAction.ONBOARDING_SUBMITTED.equals(action)) return "SUBMITTED";
-        if (AuditAction.VETTING_NOTE_ADDED.equals(action)) return "NOTE_ADDED";
-        if (!AuditAction.VETTING_TRANSITION.equals(action) || to == null) return "OTHER";
-        return switch (to) {
-            case "UNDER_REVIEW" -> "MORE_INFO_REQUIRED".equals(from) ? "RESUBMITTED" : "PICKED_UP";
-            case "MORE_INFO_REQUIRED" -> "MORE_INFO_REQUESTED";
-            default -> to;
-        };
     }
 
     private List<ActionView> actionsFor(AuthenticatedUser viewer, CaseRow c) {
@@ -183,24 +202,6 @@ public class VettingService {
         CaseRow c = loadCase(caseId, false);
         if (!canSee(viewer, c)) throw ApiException.notFound();
         return c;
-    }
-
-    // Cases a viewer cannot see are reported as 404 so their existence is not confirmed
-    static boolean canSee(AuthenticatedUser viewer, CaseRow c) {
-        if ("ADMIN".equals(viewer.role())) return true;
-        return "CONSULTANT".equals(viewer.role())
-                && (c.status() == VettingStatus.SUBMITTED || viewer.id().equals(c.assignedConsultantId()));
-    }
-
-    private static void requireStaff(AuthenticatedUser viewer) {
-        if (!"CONSULTANT".equals(viewer.role()) && !"ADMIN".equals(viewer.role())) {
-            throw new AccessDeniedException("Reviewer access only");
-        }
-    }
-
-    record CaseRow(UUID profileId, UUID executiveUserId, VettingStatus status, UUID assignedConsultantId, String assignedConsultantEmail,
-                           String moreInfoMessage, String decisionReason, OffsetDateTime submittedAt,
-                           OffsetDateTime updatedAt, OffsetDateTime decidedAt, String draftJson) {
     }
 
     private CaseRow loadCase(UUID caseId, boolean forUpdate) {
@@ -229,7 +230,9 @@ public class VettingService {
         }
     }
 
-    private static String nameOrDefault(String name) {
-        return name == null || name.isBlank() ? "Unnamed executive" : name;
+    record CaseRow(UUID profileId, UUID executiveUserId, VettingStatus status, UUID assignedConsultantId,
+                   String assignedConsultantEmail,
+                   String moreInfoMessage, String decisionReason, OffsetDateTime submittedAt,
+                   OffsetDateTime updatedAt, OffsetDateTime decidedAt, String draftJson) {
     }
 }

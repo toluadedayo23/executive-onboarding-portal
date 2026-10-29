@@ -15,9 +15,6 @@ public class IdempotencyRepository {
         this.db = db;
     }
 
-    public record Stored(String requestHmac, int status, String body) {
-    }
-
     public Optional<Stored> find(UUID userId, UUID key) {
         return db.query("SELECT request_hmac, response_status, response_body::text FROM idempotency_keys "
                         + "WHERE user_id = ? AND idempotency_key = ?",
@@ -35,5 +32,8 @@ public class IdempotencyRepository {
 
     public void deleteAllForUser(UUID userId) {
         db.update("DELETE FROM idempotency_keys WHERE user_id = ?", userId);
+    }
+
+    public record Stored(String requestHmac, int status, String body) {
     }
 }

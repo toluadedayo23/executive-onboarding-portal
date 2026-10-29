@@ -22,9 +22,6 @@ public class ConsentController {
         this.service = service;
     }
 
-    public record ConsentRequest(boolean granted) {
-    }
-
     @GetMapping
     public ConsentService.Status status(@AuthenticationPrincipal AuthenticatedUser user) {
         return service.status(user.id());
@@ -36,5 +33,8 @@ public class ConsentController {
         if (!request.granted()) throw ApiException.badRequest("Consent must be explicitly granted");
         service.grant(user, http.getRemoteAddr());
         return ResponseEntity.noContent().build();
+    }
+
+    public record ConsentRequest(boolean granted) {
     }
 }

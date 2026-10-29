@@ -12,14 +12,6 @@ public class ApiException extends RuntimeException {
         this.code = code;
     }
 
-    public HttpStatus status() {
-        return status;
-    }
-
-    public String code() {
-        return code;
-    }
-
     public static ApiException notFound() {
         return new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Resource not found");
     }
@@ -50,5 +42,13 @@ public class ApiException extends RuntimeException {
 
     public static ApiException rateLimited() {
         return new ApiException(HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED", "Too many requests. Try again shortly.");
+    }
+
+    public HttpStatus status() {
+        return status;
+    }
+
+    public String code() {
+        return code;
     }
 }

@@ -40,6 +40,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class DocumentDeleteIntegrationTest {
     @Container
     static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    static Path uploadDir;
+    @Autowired
+    MockMvc mvc;
+    @Autowired
+    AuthService auth;
+    @Autowired
+    JdbcTemplate db;
+    @Autowired
+    ObjectMapper json;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry r) throws Exception {
@@ -50,12 +59,11 @@ class DocumentDeleteIntegrationTest {
         r.add("app.upload-dir", uploadDir::toString);
     }
 
-    static Path uploadDir;
-
-    @Autowired MockMvc mvc;
-    @Autowired AuthService auth;
-    @Autowired JdbcTemplate db;
-    @Autowired ObjectMapper json;
+    private static MockHttpServletRequestBuilder as(MockHttpServletRequestBuilder request, User user) {
+        var principal = new AuthenticatedUser(user.getId(), user.getEmail(), user.getRole());
+        return request.with(authentication(new UsernamePasswordAuthenticationToken(principal, null,
+                List.of(new SimpleGrantedAuthority("ROLE_EXECUTIVE"))))).with(csrf());
+    }
 
     @Test
     void anExecutiveCanRemoveTheirOwnDocumentWhileEditableButNotSomeoneElses() throws Exception {
@@ -83,11 +91,5 @@ class DocumentDeleteIntegrationTest {
         User u = auth.create(email, "VaultDocPass12", "EXECUTIVE");
         db.update("INSERT INTO consents(user_id) VALUES (?)", u.getId());
         return u;
-    }
-
-    private static MockHttpServletRequestBuilder as(MockHttpServletRequestBuilder request, User user) {
-        var principal = new AuthenticatedUser(user.getId(), user.getEmail(), user.getRole());
-        return request.with(authentication(new UsernamePasswordAuthenticationToken(principal, null,
-                List.of(new SimpleGrantedAuthority("ROLE_EXECUTIVE"))))).with(csrf());
     }
 }

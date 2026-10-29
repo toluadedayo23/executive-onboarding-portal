@@ -18,7 +18,31 @@ import java.util.Base64;
 public class PushConfig {
     private static final Logger log = LoggerFactory.getLogger(PushConfig.class);
 
-    public record PushStatus(boolean enabled, String publicKey) {
+    static String problemWith(PushProperties p) {
+        if (isBlank(p.vapidPublicKey()) || isBlank(p.vapidPrivateKey()) || isBlank(p.vapidSubject())) {
+            return "VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT must all be set";
+        }
+        byte[] pub = decode(p.vapidPublicKey());
+        if (pub == null || pub.length != 65 || pub[0] != 0x04)
+            return "VAPID_PUBLIC_KEY must be a base64url uncompressed P-256 point";
+        byte[] priv = decode(p.vapidPrivateKey());
+        if (priv == null || priv.length != 32) return "VAPID_PRIVATE_KEY must be a base64url 32-byte P-256 private key";
+        if (!p.vapidSubject().startsWith("mailto:") && !p.vapidSubject().startsWith("https://")) {
+            return "VAPID_SUBJECT must be a mailto: or https:// URI";
+        }
+        return null;
+    }
+
+    private static byte[] decode(String value) {
+        try {
+            return Base64.getUrlDecoder().decode(value);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 
     @Bean
@@ -51,29 +75,6 @@ public class PushConfig {
         return executor;
     }
 
-    static String problemWith(PushProperties p) {
-        if (isBlank(p.vapidPublicKey()) || isBlank(p.vapidPrivateKey()) || isBlank(p.vapidSubject())) {
-            return "VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT must all be set";
-        }
-        byte[] pub = decode(p.vapidPublicKey());
-        if (pub == null || pub.length != 65 || pub[0] != 0x04) return "VAPID_PUBLIC_KEY must be a base64url uncompressed P-256 point";
-        byte[] priv = decode(p.vapidPrivateKey());
-        if (priv == null || priv.length != 32) return "VAPID_PRIVATE_KEY must be a base64url 32-byte P-256 private key";
-        if (!p.vapidSubject().startsWith("mailto:") && !p.vapidSubject().startsWith("https://")) {
-            return "VAPID_SUBJECT must be a mailto: or https:// URI";
-        }
-        return null;
-    }
-
-    private static byte[] decode(String value) {
-        try {
-            return Base64.getUrlDecoder().decode(value);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
-    }
-
-    private static boolean isBlank(String s) {
-        return s == null || s.isBlank();
+    public record PushStatus(boolean enabled, String publicKey) {
     }
 }

@@ -35,9 +35,6 @@ public class PushSubscriptionService {
         this.db = db;
     }
 
-    public record Result(UUID id, boolean created) {
-    }
-
     public String publicKey() {
         requireEnabled();
         return status.publicKey();
@@ -81,6 +78,10 @@ public class PushSubscriptionService {
     }
 
     private void requireEnabled() {
-        if (!status.enabled()) throw ApiException.unavailable("PUSH_DISABLED", "Notifications are not available on this server");
+        if (!status.enabled())
+            throw ApiException.unavailable("PUSH_DISABLED", "Notifications are not available on this server");
+    }
+
+    public record Result(UUID id, boolean created) {
     }
 }
