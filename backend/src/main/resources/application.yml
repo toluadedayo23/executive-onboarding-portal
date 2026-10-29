@@ -1,0 +1,70 @@
+spring:
+  application:
+    name: executive-platform
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/executive_platform}
+    username: ${DB_USERNAME:exec_platform_dev}
+    password: ${DB_PASSWORD:dev-only-change-me}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
+  profiles:
+    default: dev
+
+server:
+  error:
+    include-stacktrace: never
+
+app:
+  upload-dir: ${UPLOAD_DIR:./data/uploads}
+  frontend-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
+
+  jwt-secret: ${JWT_SECRET:dev-only-secret-change-me-please-32-bytes}
+  jwt-issuer: ${JWT_ISSUER:exec-platform}
+  jwt-ttl-minutes: ${JWT_TTL_MINUTES:60}
+  auth-cookie: ${AUTH_COOKIE:EXEC_AUTH}
+  cookie-secure: ${COOKIE_SECURE:false}
+  seed-enabled: ${APP_SEED_ENABLED:false}
+  encryption-key: ${ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+  idempotency-ttl-hours: ${IDEMPOTENCY_TTL_HOURS:168}
+  push:
+    vapid-public-key: ${VAPID_PUBLIC_KEY:}
+    vapid-private-key: ${VAPID_PRIVATE_KEY:}
+    vapid-subject: ${VAPID_SUBJECT:}
+    # SSRF guard: the only push services we will send to. "*." matches subdomains.
+    allowed-hosts: ${PUSH_ALLOWED_HOSTS:fcm.googleapis.com,updates.push.services.mozilla.com,*.notify.windows.com,web.push.apple.com}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+server:
+  forward-headers-strategy: framework
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+server:
+  forward-headers-strategy: native
+  ssl:
+    enabled: ${SERVER_SSL_ENABLED:false}
+app:
+  cookie-secure: true
+  encryption-key: ${ENCRYPTION_KEY:}
